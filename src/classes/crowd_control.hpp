@@ -3,7 +3,6 @@
 
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/classes/object.hpp>
-#include <godot_cpp/classes/random_number_generator.hpp>
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/thread.hpp>
@@ -50,18 +49,20 @@ class CrowdControl : public Object {
 	friend class CCNetworkManager;
 
 public:
-	static const char *platform_names[];
-
 	static const char *effect_instance_status_names[];
 
 private:
 	static CrowdControl *singleton;
 	const String LOG_PREFIX = "[CC] ";
+	/// @brief Seconds a request may be held before it has to be answered.
+	/// @details
+	/// The service expects an answer within 60 seconds, we give up a little earlier
+	/// to leave room for the response to make it there.
+	static constexpr double REQUEST_TIMEOUT = 55.0;
 
 	Ref<StreamUser> crowd_user;
 	Ref<StreamUser> anonymous_user;
 	Ref<StreamUser> streamer_user;
-	Ref<StreamUser> test_user;
 	HashMap<String, Ref<StreamUser>> stream_users = HashMap<String, Ref<StreamUser>>();
 	HashMap<StringName, Ref<CCEffect>> effects = HashMap<StringName, Ref<CCEffect>>();
 	// For some reason references get lost when using List<>, need to investigate
@@ -76,7 +77,6 @@ private:
 	bool auto_starting_session = false;
 
 	// ProjectSettings/common
-	int game_key = 92;
 	String game_name = "Godot Demo";
 	int reconnect_retry_count = -1;
 	float reconnect_retry_delay = 5.0f;
@@ -106,7 +106,6 @@ private:
 	bool session_active = false;
 
 	Ref<CCNetworkManager> connection;
-	Ref<RandomNumberGenerator> rng;
 	Ref<Thread> process_thread;
 	/// @brief Mutex to ensure we don't perform unsafe methods on the effect queue (resizing is not thread-safe)
 	Ref<Mutex> queue_mutex;
@@ -119,9 +118,28 @@ private:
 	void tree_physics_process();
 
 	void handle_pending();
+	/// @brief Answers requests that have been waiting for too long with a temporary failure.
+	void expire_stale_requests();
 
 	bool try_start(const Ref<CCEffectInstance> &instance);
 	bool stop_effect(const Ref<CCEffectInstanceTimed> &instance);
+	/// @brief Stops a running timed effect.
+	/// @param notify whether the service should be told, false if it was the one asking for the stop
+	bool end_effect(const Ref<CCEffectInstanceTimed> &instance, bool notify);
+	/// @brief Stops every running effect and fails every pending request, e.g. because the session ended.
+	void stop_all_effects();
+	/// @brief Drops a request the service no longer wants fulfilled.
+	void cancel_request(const String &p_request_id);
+	/// @brief Reports the state of a request to the service.
+	/// @param after_success sends `success` first as part of the same call, as expected when a timed effect begins
+	void respond(const Ref<CCEffectInstance> &instance, EffectInstanceStatus status, bool after_success = false, const String &message = "");
+	/// @brief Whether an effect this one conflicts with is currently running.
+	bool has_running_conflict(const Ref<CCEffect> &effect) const;
+	/// @brief Applies a menu state to a set of effects and reports it in a single call.
+	bool report_effects(const PackedStringArray &p_ids, CCEffect::EffectMenuStatus p_status, const String &p_message);
+	PackedStringArray get_all_effect_ids() const;
+	/// @brief Reports every hidden / unavailable effect, for sessions that were not started by the game.
+	void sync_effect_states();
 	bool start_effect(const Ref<CCEffectInstance> &instance);
 	void retry_start_effect(const Ref<CCEffect> &effect, const Ref<CCEffectInstance> &instance, bool &dequeue, CCEffect::EffectResult &result);
 	void finish_start_effect(const Ref<CCEffect> &effect, const Ref<CCEffectInstance> &instance, bool &dequeue);
@@ -136,11 +154,11 @@ private:
 	void _on_effect_requested(const Ref<CCEffect> &effect);
 	void _on_session_started();
 
-	void queue_effect(const Ref<CCEffect> &effect, User requester, String requestID, bool is_anonymous, HashMap<String, ParameterEntry> parameters = HashMap<String, ParameterEntry>());
+	void queue_effect(const Ref<CCEffect> &effect, User requester, String requestID, bool is_anonymous, HashMap<String, ParameterEntry> parameters = HashMap<String, ParameterEntry>(), double duration = 0, bool is_test = false, bool is_local = false);
 	void dequeue_effect(const Ref<CCEffectInstance> &instance, CCEffect::EffectResult result);
 
 	template <class T>
-	void create_effect_instance(const Ref<StreamUser> &user, const Ref<CCEffect> &effect, User requester, String requestID, HashMap<String, ParameterEntry> parameters = HashMap<String, ParameterEntry>());
+	void create_effect_instance(const Ref<StreamUser> &user, const Ref<CCEffect> &effect, User requester, String requestID, HashMap<String, ParameterEntry> parameters = HashMap<String, ParameterEntry>(), double duration = 0, bool is_test = false, bool is_local = false);
 	void cancel_effect(const Ref<CCEffectInstance> &instance);
 
 	Ref<StreamUser> get_stream_user(const User &user);
@@ -150,9 +168,6 @@ protected:
 
 public:
 	static CrowdControl *get_singleton();
-
-	int get_game_key() const { return game_key; }
-	void set_game_key(int p_game_key) { game_key = p_game_key; }
 
 	String get_game_name() const { return game_name; }
 	void set_game_name(const String &p_game_name) { game_name = p_game_name; }
@@ -203,7 +218,7 @@ public:
 	void set_debug_exception(bool p_debug_exception) { debug_exception = p_debug_exception; }
 
 	bool is_paused() const { return paused; }
-	void set_paused(bool p_paused) { paused = p_paused; }
+	void set_paused(bool p_paused);
 
 	bool is_auto_starting_session() const { return auto_starting_session; }
 	void set_auto_starting_session(bool p_auto_starting_session) { auto_starting_session = p_auto_starting_session; }
@@ -228,7 +243,52 @@ public:
 
 	Error connect_to_crowd_control();
 	void close();
-	void login(Platform p_platform);
+	/// @brief Starts the login. Emits `auth_code_received` with the URL the user has to sign in at,
+	/// followed by `logged_in` or `login_failed`.
+	void login();
+	/// @brief Logs the user out and forgets the stored login.
+	void logout();
+	bool is_logged_in() const;
+	/// @brief Asks the service for a later expiry of the login. Done automatically when it is about to run out,
+	/// but only applications with the `token:extend` scope may do so. Emits `token_refreshed` on success.
+	bool extend_token();
+	/// @brief The link viewers use to interact with the streamer, empty if not logged in.
+	String get_interact_link() const;
+	/// @brief Opens the interact link in the browser.
+	void launch_interact_link() const;
+	/// @brief Sends a ping, `pong_received` is emitted when the service answers.
+	void ping();
+
+	/* MENU CONTROL */
+	// "Show" / "hide" control whether effects are listed at all, "enable" / "disable" whether listed effects can
+	// be bought. Changes made outside of a session are remembered and applied when the next one starts.
+
+	bool show_effects(const PackedStringArray &p_ids, const String &p_message = "");
+	bool hide_effects(const PackedStringArray &p_ids, const String &p_message = "");
+	bool enable_effects(const PackedStringArray &p_ids, const String &p_message = "");
+	bool disable_effects(const PackedStringArray &p_ids, const String &p_message = "");
+	bool show_all_effects(const String &p_message = "");
+	bool hide_all_effects(const String &p_message = "");
+	bool enable_all_effects(const String &p_message = "");
+	bool disable_all_effects(const String &p_message = "");
+	/// @brief The `effectReportArgs` describing every hidden / unavailable effect.
+	Array get_effect_report_args() const;
+
+	/// @brief Tells the service that an event defined in the game pack (`meta.events`) occurred.
+	bool trigger_event(const String &p_event_id, const Dictionary &p_args = Dictionary());
+	/// @brief Updates metadata values of the game pack, e.g. for effect names using `{{key}}` placeholders.
+	bool update_metadata(const String &p_key, const Variant &p_value);
+	bool update_metadata_values(const Dictionary &p_values);
+
+	/* CUSTOM EFFECTS (development tool) */
+	// Needs a login with the `custom-effects:write` scope and a game pack with `allowCustomEffects` enabled.
+	// The result is reported through `custom_effects_updated`.
+
+	bool can_upload_custom_effects() const;
+	/// @brief Uploads the definitions of all registered effects flagged as `custom`.
+	bool upload_custom_effects(CustomEffectsMode p_mode = CUSTOM_EFFECTS_MERGE);
+	bool delete_custom_effects(const PackedStringArray &p_ids);
+	bool delete_all_custom_effects();
 	bool is_connected_to_crowd_control() const;
 	bool is_session_active() const;
 

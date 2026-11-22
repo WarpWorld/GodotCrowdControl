@@ -331,6 +331,15 @@ PackedStringArray CCEffectParameters::get_item_parameter_options(int p_idx) cons
 	return parameter_entries[p_idx].get_option_names();
 }
 
+PackedStringArray CCEffectParameters::get_item_parameter_option_ids(int p_idx) const {
+	ERR_FAIL_INDEX_V(p_idx, parameter_entries.size(), PackedStringArray());
+	PackedStringArray out;
+	for (int i = 0; i < parameter_entries[p_idx].options.size(); i++) {
+		out.append(parameter_entries[p_idx].options[i].id);
+	}
+	return out;
+}
+
 void CCEffectParameters::set_range_parameter_min(int p_idx, uint32_t p_min) {
 	if (p_idx < 0) {
 		p_idx += get_parameter_count();

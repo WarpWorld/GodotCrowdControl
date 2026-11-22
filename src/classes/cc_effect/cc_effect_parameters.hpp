@@ -34,10 +34,10 @@ public:
 	};
 
 	struct ParameterEntry : CCEffectBidWar::BidWarEntry {
-		ParameterEntryKind kind;
+		ParameterEntryKind kind = ITEM;
 		Vector<ParameterOption> options;
-		uint32_t min;
-		uint32_t max;
+		uint32_t min = 1;
+		uint32_t max = 99;
 
 		void create_options(const String &p_id, const PackedStringArray &p_names);
 		PackedStringArray get_option_names() const;
@@ -84,6 +84,7 @@ public:
 
 	void set_item_parameter_options(int p_idx, const PackedStringArray &p_options);
 	PackedStringArray get_item_parameter_options(int p_idx) const;
+	PackedStringArray get_item_parameter_option_ids(int p_idx) const;
 
 	void set_range_parameter_min(int p_idx, uint32_t p_min);
 	void set_range_parameter_max(int p_idx, uint32_t p_max);

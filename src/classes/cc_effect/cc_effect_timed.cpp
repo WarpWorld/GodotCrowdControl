@@ -15,17 +15,19 @@ void CCEffectTimed::_bind_methods() {
 
 	GDVIRTUAL_BIND(_start, "effect")
 	GDVIRTUAL_BIND(_stop, "effect", "force")
-	GDVIRTUAL_BIND(_pause, "effect")
-	GDVIRTUAL_BIND(_resume, "effect")
-	GDVIRTUAL_BIND(_reset, "effect")
+	GDVIRTUAL_BIND(_pause)
+	GDVIRTUAL_BIND(_resume)
+	GDVIRTUAL_BIND(_reset)
 	GDVIRTUAL_BIND(_should_be_running)
 }
 
 CCEffect::EffectResult CCEffectTimed::trigger(Ref<CCEffectInstance> effect) {
 	paused = false;
 	Ref<CCEffectInstanceTimed> timed = Object::cast_to<CCEffectInstanceTimed>(effect.ptr());
-	timed->set_end_time(effect->get_start_time() + duration);
-	timed->set_time_left(duration);
+	// The request decides how long the effect runs, the resource only provides the default.
+	const float requested_duration = timed->get_duration();
+	timed->set_end_time(effect->get_start_time() + requested_duration);
+	timed->set_time_left(requested_duration);
 	Variant res = start(timed);
 	if ((int)res != 0) {
 		return (EffectResult)(int)res;
@@ -34,13 +36,16 @@ CCEffect::EffectResult CCEffectTimed::trigger(Ref<CCEffectInstance> effect) {
 }
 
 CCEffect::EffectResult CCEffectTimed::start(Ref<CCEffectInstanceTimed> effect) {
-	EffectResult res;
-	GDVIRTUAL_CALL(_start, effect, res);
+	EffectResult res = SUCCESS;
+	if (!GDVIRTUAL_CALL(_start, effect, res)) {
+		CrowdControl::get_singleton()->log_error(vformat("Timed effect '%s' does not implement _start()!", get_id()));
+		return UNAVAILABLE;
+	}
 	return res;
 }
 
 bool CCEffectTimed::stop(Ref<CCEffectInstanceTimed> effect, bool force) {
-	bool res;
+	bool res = false;
 	GDVIRTUAL_CALL(_stop, effect, force, res);
 	if (!res && force) {
 		CrowdControl::get_singleton()->log_error(vformat("Effect '%s' wasn't stopped, but 'force==true'!", get_id()));
@@ -61,7 +66,7 @@ void CCEffectTimed::resume(Ref<CCEffectInstanceTimed> effect) {
 
 void CCEffectTimed::reset(Ref<CCEffectInstanceTimed> effect) {
 	paused = false;
-	effect->set_time_left(duration);
+	effect->set_time_left(effect->get_duration());
 	GDVIRTUAL_CALL(_reset);
 }
 

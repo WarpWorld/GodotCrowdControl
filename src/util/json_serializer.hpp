@@ -232,11 +232,18 @@ private:
 
 	template <typename T>
 	static T get_property(const String &prop_key, const Dictionary &data, typename std::enable_if<is_trivially_serializable_v<T>, T>::type * = 0) {
+		// Payloads regularly leave optional fields out (or null), those keep their default value
+		if (!data.has(prop_key) || ((Variant)data[prop_key]).get_type() == Variant::NIL) {
+			return T();
+		}
 		return static_cast<T>(data[prop_key]);
 	}
 
 	template <typename T>
 	static T get_property(const String &prop_key, const Dictionary &data, typename std::enable_if<!is_trivially_serializable_v<T>, T>::type * = 0) {
+		if (!data.has(prop_key) || ((Variant)data[prop_key]).get_type() != Variant::DICTIONARY) {
+			return deserialize<T>(Dictionary());
+		}
 		return deserialize<T>(data[prop_key]);
 	}
 };

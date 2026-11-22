@@ -9,16 +9,20 @@ enum BroadcasterType {
 	PARTNER,
 };
 
-enum Platform {
-	TWITCH,
-	YOUTUBE,
-	DISCORD,
-};
-
 enum TargetServer {
 	PRODUCTION,
 	STAGING,
 	DEV,
+};
+
+/// @brief How uploaded custom effects are combined with the ones already stored for the game pack.
+enum CustomEffectsMode {
+	/// Add or update the uploaded effects, keep everything else.
+	CUSTOM_EFFECTS_MERGE,
+	/// Replace the whole list with the uploaded effects.
+	CUSTOM_EFFECTS_REPLACE_ALL,
+	/// Replace only the uploaded effects.
+	CUSTOM_EFFECTS_REPLACE_PARTIAL,
 };
 
 enum EffectInstanceStatus {
@@ -32,7 +36,7 @@ enum EffectInstanceStatus {
 };
 
 //VARIANT_ENUM_CAST(BroadcasterType)
-VARIANT_ENUM_CAST(Platform)
 VARIANT_ENUM_CAST(TargetServer)
+VARIANT_ENUM_CAST(CustomEffectsMode)
 
 #endif // CROWD_CONTROL_CC_ENUMS_HPP

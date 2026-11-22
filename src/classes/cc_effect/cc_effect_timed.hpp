@@ -23,7 +23,7 @@ protected:
 
 private:
 	float duration = 60.0f;
-	bool paused;
+	bool paused = false;
 
 public:
 	virtual EffectType get_effect_type() const override { return TIMED; }

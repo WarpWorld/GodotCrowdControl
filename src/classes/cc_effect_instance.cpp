@@ -10,6 +10,7 @@
 
 void CCEffectInstance::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_test"), &CCEffectInstance::is_test);
+	ClassDB::bind_method(D_METHOD("is_local"), &CCEffectInstance::is_local);
 	ClassDB::bind_method(D_METHOD("get_effect"), &CCEffectInstance::get_effect);
 	ClassDB::bind_method(D_METHOD("get_user"), &CCEffectInstance::get_user);
 	ClassDB::bind_method(D_METHOD("get_id"), &CCEffectInstance::get_id);
@@ -28,6 +29,7 @@ void CCEffectInstanceTimed::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_active"), &CCEffectInstanceTimed::is_active);
 	ClassDB::bind_method(D_METHOD("get_effect_timed"), &CCEffectInstanceTimed::get_effect_timed);
 	ClassDB::bind_method(D_METHOD("get_end_time"), &CCEffectInstanceTimed::get_end_time);
+	ClassDB::bind_method(D_METHOD("get_duration"), &CCEffectInstanceTimed::get_duration);
 	ClassDB::bind_method(D_METHOD("get_time_left"), &CCEffectInstanceTimed::get_time_left);
 	ClassDB::bind_method(D_METHOD("is_paused"), &CCEffectInstanceTimed::is_paused);
 
@@ -40,6 +42,14 @@ Ref<CCEffectTimed> CCEffectInstanceTimed::get_effect_timed() const {
 
 void CCEffectInstanceTimed::set_effect_timed(const Ref<CCEffectTimed> &p_effect_timed) {
 	set_effect(p_effect_timed);
+}
+
+float CCEffectInstanceTimed::get_duration() const {
+	if (duration > 0) {
+		return duration;
+	}
+	Ref<CCEffectTimed> timed = get_effect_timed();
+	return timed.is_valid() ? timed->get_duration() : 0.0f;
 }
 
 bool CCEffectInstanceTimed::is_paused() const {

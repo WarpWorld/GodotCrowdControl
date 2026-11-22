@@ -65,6 +65,8 @@ struct Effect {
 	PackedStringArray category;
 	String description;
 	uint32_t price;
+	/// @brief Requested duration in seconds for timed effects, 0 if not supplied.
+	double duration = 0;
 	HashMap<String, Parameters> parameters;
 	String image_url;
 
@@ -77,12 +79,25 @@ struct Effect {
 		out.category = data.get("category", PackedStringArray());
 		out.description = data.get("description", "");
 		out.price = data.get("price", 1);
+		// The duration is sent in seconds, older payloads wrap it as { "value": <seconds> }
+		Variant duration = data.get("duration", 0);
+		if (duration.get_type() == Variant::DICTIONARY) {
+			duration = ((Dictionary)duration).get("value", 0);
+		}
+		if (duration.get_type() == Variant::INT || duration.get_type() == Variant::FLOAT) {
+			out.duration = duration;
+		}
 		//parameters
 		out.parameters = HashMap<String, Parameters>();
-		Dictionary parameters = data.get("parameters", Dictionary());
-		for (int i = 0; i < parameters.size(); i++) {
-			String key = parameters.keys()[i];
-			out.parameters.insert(key, JSONSerializer::deserialize<Parameters>(parameters[key]));
+		Variant raw_parameters = data.get("parameters", Dictionary());
+		if (raw_parameters.get_type() == Variant::DICTIONARY) {
+			Dictionary parameters = raw_parameters;
+			for (int i = 0; i < parameters.size(); i++) {
+				String key = parameters.keys()[i];
+				if (((Variant)parameters[key]).get_type() == Variant::DICTIONARY) {
+					out.parameters.insert(key, JSONSerializer::deserialize<Parameters>(parameters[key]));
+				}
+			}
 		}
 		out.image_url = data.get("image", "");
 		return out;
@@ -97,6 +112,7 @@ struct Effect {
 		out["category"] = category;
 		out["description"] = description;
 		out["price"] = price;
+		out["duration"] = duration;
 		//parameters
 		Dictionary out_parameters;
 		for (KeyValue<String, Parameters> kv : parameters) {
@@ -128,6 +144,13 @@ struct GamePack {
 			json_property(&GamePack::platform, "platform"));
 };
 
+struct SourceDetails {
+	String type;
+
+	constexpr static auto json_properties = std::make_tuple(
+			json_property(&SourceDetails::type, "type"));
+};
+
 struct EffectRequest {
 	String request_id;
 	String game_session_id;
@@ -141,8 +164,9 @@ struct EffectRequest {
 	GamePack game_pack;
 	Effect effect;
 	uint32_t unit_cost;
-	bool is_test;
-	bool is_anonymous;
+	bool is_test = false;
+	bool is_anonymous = false;
+	SourceDetails source_details;
 	HashMap<String, ParameterEntry> parameters;
 	String status;
 	uint32_t quantity;
@@ -161,14 +185,36 @@ struct EffectRequest {
 		out.game_pack = JSONSerializer::deserialize<GamePack>(data.get("gamePack", Dictionary()));
 		out.effect = JSONSerializer::deserialize<Effect>(data.get("effect", Dictionary()));
 		out.unit_cost = data.get("unitPrice", 1);
-		out.is_test = data.get("isTest", false);
+		Variant raw_source = data.get("sourceDetails", Dictionary());
+		if (raw_source.get_type() == Variant::DICTIONARY) {
+			out.source_details.type = ((Dictionary)raw_source).get("type", "");
+		}
+		// Test requests are flagged through their source, `isTest` is only kept for older payloads.
+		out.is_test = (bool)data.get("isTest", false) || out.source_details.type == "crowd-control-test";
 		out.is_anonymous = data.get("anonymous", false);
 		//parameters
 		out.parameters = HashMap<String, ParameterEntry>();
-		Dictionary parameters = data.get("parameters", Dictionary());
-		for (int i = 0; i < parameters.size(); i++) {
-			String key = parameters.keys()[i];
-			out.parameters.insert(key, JSONSerializer::deserialize<ParameterEntry>(parameters[key]));
+		Variant raw_parameters = data.get("parameters", Dictionary());
+		if (raw_parameters.get_type() == Variant::DICTIONARY) {
+			// keyed by parameter ID
+			Dictionary parameters = raw_parameters;
+			for (int i = 0; i < parameters.size(); i++) {
+				String key = parameters.keys()[i];
+				if (((Variant)parameters[key]).get_type() == Variant::DICTIONARY) {
+					out.parameters.insert(key, JSONSerializer::deserialize<ParameterEntry>(parameters[key]));
+				}
+			}
+		} else if (raw_parameters.get_type() == Variant::ARRAY) {
+			// plain list, fall back to the parameter name (or its index) as key
+			Array parameters = raw_parameters;
+			for (int i = 0; i < parameters.size(); i++) {
+				if (((Variant)parameters[i]).get_type() != Variant::DICTIONARY) {
+					continue;
+				}
+				Dictionary entry = parameters[i];
+				String key = entry.get("id", entry.get("name", String::num_int64(i)));
+				out.parameters.insert(key, JSONSerializer::deserialize<ParameterEntry>(entry));
+			}
 		}
 		out.status = data.get("status", "");
 		out.quantity = data.get("quantity", 1);
@@ -191,6 +237,7 @@ struct EffectRequest {
 		out["unitPrice"] = unit_cost;
 		out["isTest"] = is_test;
 		out["anonymous"] = is_anonymous;
+		out["sourceDetails"] = JSONSerializer::serialize<SourceDetails>(source_details);
 		//parameters
 		Dictionary out_parameters;
 		for (KeyValue<String, ParameterEntry> kv : parameters) {

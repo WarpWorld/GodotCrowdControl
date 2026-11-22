@@ -20,15 +20,23 @@ protected:
 
 private:
 	bool test = false;
+	bool local = false;
 	Ref<CCEffect> effect;
 	Ref<StreamUser> user;
 	String id;
 	int retry_count = 5;
-	float start_time = -1;
+	// Unix timestamps need double precision, a float can only resolve them to ~2 minutes.
+	double start_time = -1;
+	double queue_time = -1;
 
 public:
 	bool is_test() const { return test; }
 	void set_test(bool p_test) { test = p_test; }
+
+	/// @brief Whether this instance was created locally (@see CrowdControl::test_effect) instead of by a
+	/// request from the Crowd Control service. Local instances are never reported back to the service.
+	bool is_local() const { return local; }
+	void set_local(bool p_local) { local = p_local; }
 
 	Ref<CCEffect> get_effect() const { return effect; }
 	void set_effect(const Ref<CCEffect> &p_effect) { effect = p_effect; }
@@ -42,8 +50,12 @@ public:
 	int get_retry_count() const { return retry_count; }
 	void set_retry_count(int p_retry_count) { retry_count = p_retry_count; }
 
-	float get_start_time() const { return start_time; }
-	void set_start_time(float p_start_time) { start_time = p_start_time; }
+	double get_start_time() const { return start_time; }
+	void set_start_time(double p_start_time) { start_time = p_start_time; }
+
+	/// @brief Unix time at which the request was received, used to answer requests before they time out.
+	double get_queue_time() const { return queue_time; }
+	void set_queue_time(double p_queue_time) { queue_time = p_queue_time; }
 
 	StringName get_effect_id() const;
 };
@@ -56,7 +68,8 @@ protected:
 
 private:
 	bool active = true;
-	float end_time = -1;
+	double end_time = -1;
+	float duration = 0;
 	float time_left = 0;
 
 public:
@@ -65,8 +78,15 @@ public:
 
 	Ref<CCEffectTimed> get_effect_timed() const;
 	void set_effect_timed(const Ref<CCEffectTimed> &p_effect_timed);
-	float get_end_time() const { return end_time; }
-	void set_end_time(const float &p_end_time) { end_time = p_end_time; }
+	double get_end_time() const { return end_time; }
+	void set_end_time(const double &p_end_time) { end_time = p_end_time; }
+
+	/// @brief The duration in seconds this instance was requested with.
+	/// @details
+	/// Streamers can change the duration of an effect in their menu, so this may differ
+	/// from @see CCEffectTimed::get_duration.
+	float get_duration() const;
+	void set_duration(const float &p_duration) { duration = p_duration; }
 
 	float get_time_left() const { return time_left; }
 	void set_time_left(const float &p_time_left) { time_left = p_time_left; }

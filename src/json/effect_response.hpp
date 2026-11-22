@@ -2,99 +2,49 @@
 #define CROWD_CONTROL_EFFECT_RESPONSE_HPP
 
 #include <godot_cpp/classes/time.hpp>
-#include <godot_cpp/templates/list.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/string.hpp>
 
-#include "classes/cc_effect/cc_effect.hpp"
-#include "classes/cc_effect_instance.hpp"
 #include "classes/cc_network_manager.hpp"
-#include "util/json_serializer.hpp"
 
 using namespace godot;
 
+/// @brief A single entry of the `args` array of an `effectResponse` RPC.
+/// @details
+/// `timeRemaining` is in milliseconds and is only sent for the timed statuses that carry it
+/// (`timedBegin`, `timedPause`, `timedResume`). It is omitted for everything else.
 struct EffectResponseArgs {
-	String id = "";
-	String status;
-	uint64_t stamp = 1;
-	float time_remaining;
+	String id;
 	String request;
-	String message;
+	String status;
+	String message = "";
+	uint64_t stamp = 0;
+	/// @brief Remaining time in milliseconds, negative means "do not send".
+	int64_t time_remaining = -1;
 
-	EffectResponseArgs(const Ref<CCEffectInstance> &instance, const String &p_status) {
+	EffectResponseArgs() {}
+
+	EffectResponseArgs(const String &p_request, const String &p_status, int64_t p_time_remaining = -1, const String &p_message = "") {
+		id = CCNetworkManager::generate_uuid();
+		request = p_request;
 		status = p_status;
-		request = instance->get_id();
-		id = CCNetworkManager::generate_random_string(26);
-		stamp = Time::get_singleton()->get_unix_time_from_system();
-		if (instance->get_effect()->get_effect_type() == CCEffect::EffectType::TIMED) {
-			Ref<CCEffectInstanceTimed> timed = Object::cast_to<CCEffectInstanceTimed>(instance.ptr());
-			time_remaining = timed->get_time_left();
-		}
-	};
-
-	EffectResponseArgs(){};
-
-	constexpr static auto json_properties = std::make_tuple(
-			json_property(&EffectResponseArgs::id, "id"),
-			json_property(&EffectResponseArgs::status, "status"),
-			json_property(&EffectResponseArgs::stamp, "stamp"),
-			json_property(&EffectResponseArgs::time_remaining, "timeRemaining"),
-			json_property(&EffectResponseArgs::request, "request"),
-			json_property(&EffectResponseArgs::message, "message"));
-};
-
-struct EffectResponseCall {
-	String method = "effectResponse";
-	List<EffectResponseArgs> args = List<EffectResponseArgs>();
-	String id = "";
-	String type = "call";
-
-	EffectResponseCall() {
-		args.push_front(EffectResponseArgs());
-	};
-
-	static EffectResponseCall deserialize(const Dictionary &data) {
-		EffectResponseCall out;
-		out.method = data.get("method", "");
-		//parameters
-		out.args = List<EffectResponseArgs>();
-		Array args = data.get("args", Array());
-		for (int i = 0; i < args.size(); i++) {
-			out.args.push_back(JSONSerializer::deserialize<EffectResponseArgs>(args[i]));
-		}
-		out.id = data.get("id", "");
-		out.type = data.get("type", "");
-		return out;
+		message = p_message;
+		time_remaining = p_time_remaining;
+		stamp = (uint64_t)Time::get_singleton()->get_unix_time_from_system();
 	}
 
 	Dictionary serialize() const {
 		Dictionary out;
-		out["method"] = method;
-		//parameters
-		Array out_args;
-		for (int i = 0; i < args.size(); i++) {
-			out_args.append(JSONSerializer::serialize<EffectResponseArgs>(args.get(i)));
-		}
-		out["args"] = out_args;
 		out["id"] = id;
-		out["type"] = type;
+		out["request"] = request;
+		out["status"] = status;
+		out["message"] = message;
+		out["stamp"] = stamp;
+		if (time_remaining >= 0) {
+			out["timeRemaining"] = time_remaining;
+		}
 		return out;
 	}
-};
-
-struct EffectResponse {
-	String token = "";
-	EffectResponseCall call = EffectResponseCall();
-
-	EffectResponse() {
-	}
-
-	EffectResponse(const String &p_token, const Ref<CCEffectInstance> &p_instance, const String &p_status) {
-		token = p_token;
-		call.args.push_front(EffectResponseArgs(p_instance, p_status));
-	}
-
-	constexpr static auto json_properties = std::make_tuple(
-			json_property(&EffectResponse::token, "token"),
-			json_property(&EffectResponse::call, "call"));
 };
 
 #endif // CROWD_CONTROL_EFFECT_RESPONSE_HPP

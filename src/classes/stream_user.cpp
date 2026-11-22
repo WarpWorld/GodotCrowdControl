@@ -17,7 +17,9 @@ Ref<StreamUser> StreamUser::make(String p_name, String p_profile_icon_url, Packe
 	Ref<StreamUser> user;
 	user.instantiate();
 	user->name = p_name;
+	user->display_name = p_name;
 	user->profile_icon_url = p_profile_icon_url;
+	user->roles = p_roles;
 	return user;
 }
 
@@ -25,6 +27,7 @@ Ref<StreamUser> StreamUser::make(String p_name, Ref<Texture2D> p_profile_icon) {
 	Ref<StreamUser> user;
 	user.instantiate();
 	user->name = p_name;
+	user->display_name = p_name;
 	user->profile_icon = p_profile_icon;
 	return user;
 }
