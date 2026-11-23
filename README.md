@@ -1,14 +1,21 @@
 # GodotCrowdControl
 
-This plugin adds support for CrowdControl, allowing it to change how players play the game on streams.
+This plugin adds support for [Crowd Control](https://crowdcontrol.live/) to games made with Godot, letting viewers
+change how the game plays on stream.
+
+Documentation: https://developer.crowdcontrol.live/godot/
+
+Requires Godot 4.5 or newer. Implements the Crowd Control 2.0 [PubSub protocol](https://developer.crowdcontrol.live/sockets/)
+(PKCE login, no application secret). See [project/README.md](project/README.md) for how to set a game up.
+
+**This does not add effects to already released games.** It is for developers adding Crowd Control to their own game.
+
+## Credits
+
+This plugin was created by [SilicDev](https://github.com/SilicDev) and is continued here from the original
+repository at https://github.com/SilicDev/GodotCrowdControl.
 
 Based on https://github.com/nathanfranke/gdextension and the Unity plugin at https://github.com/WarpWorld/crowd-control-unity-plugin
-
-Tested against 4.1, 4.1.3 and 4.2.1
-
-**This does not add effects to already released games**
--> I intend to look into this but atm this is not my priority
-
 
 ## Known Issues
 
