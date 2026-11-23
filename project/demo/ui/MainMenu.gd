@@ -20,9 +20,10 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		# auto_accept_quit is off once we connected, so quitting is always up to us
 		if CrowdControl.is_connected_to_crowd_control():
 			CrowdControl.close()
-			get_tree().quit(0)
+		get_tree().quit(0)
 
 
 func _on_play_button_pressed() -> void:

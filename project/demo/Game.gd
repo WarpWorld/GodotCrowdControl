@@ -32,6 +32,9 @@ func _notification(what: int) -> void:
 		if CrowdControl.is_connected_to_crowd_control():
 			CrowdControl.disconnected.connect(_on_CrowdControl_disconnected)
 			CrowdControl.close()
+		else:
+			# Nothing to wait for (never connected or the connection is down)
+			get_tree().quit()
 
 
 func can_move_to(pos: Vector2) -> bool:
